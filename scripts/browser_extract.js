@@ -1,11 +1,14 @@
 // Browser extractor for sites that block scripts or need a login.
 // Run it in a browser tab (e.g. a browser tool's "execute JavaScript" action) that is open
 // on a search/results page of one of these sites:
-//   Behance   https://www.behance.net/search/projects?search=<query>
-//   Mobbin    https://mobbin.com/search/... (needs your own logged-in session)
-//   Pinterest https://www.pinterest.com/search/pins/?q=<query>   (fallback for sauce.py)
-//   Dribbble  https://dribbble.com/search/<query>                 (fallback for sauce.py)
-//   Cosmos    https://www.cosmos.so/explore?q=<query>             (fallback for sauce.py)
+//   Behance    https://www.behance.net/search/projects?search=<query>
+//   Mobbin     https://mobbin.com/search/... (needs your own logged-in session)
+//   ArtStation https://www.artstation.com/search?query=<query>
+//   Art Institute of Chicago  https://www.artic.edu/collection?q=<query>
+//   Pinterest  https://www.pinterest.com/search/pins/?q=<query>   (fallback for sauce.py)
+//   Dribbble   https://dribbble.com/search/<query>                 (fallback for sauce.py)
+//   Cosmos     https://www.cosmos.so/explore?q=<query>             (fallback for sauce.py)
+//   Any other gallery: falls back to every image wider than 300px with its link.
 // It scrolls a few screens to trigger lazy loading, then returns an array of
 // {source, title, author, page, image} for the visible items, de-duplicated by image.
 // Nothing is saved, liked or posted; it only reads what the page already shows you.
@@ -58,6 +61,23 @@
       const u = li.querySelector('.display-name');
       out.push({ source: 'dribbble', title: clean(t ? t.textContent : img.alt), author: clean(u && u.textContent),
                  page: a ? a.href : '', image: best(img).split('?')[0] });
+    }
+  } else if (host.endsWith('artstation.com')) {
+    for (const a of document.querySelectorAll('a[href*="/artwork/"]')) {
+      const img = a.querySelector('img') || a.parentElement.querySelector('img');
+      if (!img || img.width < 80) continue;
+      const card = a.closest('[class*="project"], [class*="gallery"], li, article') || a.parentElement;
+      const user = card && card.querySelector('a[href*="artstation.com/"]:not([href*="/artwork/"])');
+      out.push({ source: 'artstation', title: clean(img.alt || a.getAttribute('title')), author: clean(user && user.textContent),
+                 page: a.href.split('?')[0], image: best(img).replace(/\/(smaller_square|small_square|small|medium|large)\//, '/large/') });
+    }
+  } else if (host.endsWith('artic.edu')) {
+    for (const a of document.querySelectorAll('a[href*="/artworks/"]')) {
+      const img = a.querySelector('img');
+      if (!img || img.width < 80) continue;
+      const m = best(img).match(/\/iiif\/2\/([^/]+)\//);
+      out.push({ source: 'artic', title: clean(img.alt || a.textContent), author: '', page: a.href.split('?')[0],
+                 image: m ? `https://www.artic.edu/iiif/2/${m[1]}/full/1686,/0/default.jpg` : best(img) });
     }
   } else if (host.endsWith('cosmos.so')) {
     for (const img of document.querySelectorAll('img[src*="cdn.cosmos.so"], img[srcset*="cdn.cosmos.so"]')) {
